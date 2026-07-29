@@ -24,6 +24,14 @@ export interface HtmlOptions extends KatexOptions {
  */
 export interface Options {
   /**
+   * Whether to support TeX-style backslash delimiters (default: `true`).
+   *
+   * Enabling this option changes the CommonMark meaning of `\(` and `\[`,
+   * which are otherwise character escapes.
+   */
+  backslashDelimiters?: boolean | null | undefined
+
+  /**
    * Whether to support math (text) with a single dollar (default: `true`).
    *
    * Single dollars work in Pandoc and many other places, but often interfere

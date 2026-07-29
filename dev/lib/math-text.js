@@ -13,7 +13,7 @@ import {codes, types} from 'micromark-util-symbol'
 /**
  * @param {Options | null | undefined} [options={}]
  *   Configuration (default: `{}`).
- * @returns {{dollar: Construct, backslash: Array<Construct>}}
+ * @returns {{dollar: Construct, backslash: Construct}}
  *   Constructs grouped by their opening marker.
  */
 export function mathText(options) {
@@ -26,10 +26,10 @@ export function mathText(options) {
 
   return {
     dollar: createDollarMathText(single),
-    backslash: [
-      createBackslashMathText(codes.leftParenthesis, codes.rightParenthesis),
-      createBackslashMathText(codes.leftSquareBracket, codes.rightSquareBracket)
-    ]
+    backslash: createBackslashMathText(
+      codes.leftParenthesis,
+      codes.rightParenthesis
+    )
   }
 }
 
@@ -73,7 +73,10 @@ function createDollarMathText(allowSingle) {
      */
     function start(code) {
       assert(code === codes.dollarSign, 'expected `$`')
-      assert(previousDollar.call(self, self.previous), 'expected correct previous')
+      assert(
+        previousDollar.call(self, self.previous),
+        'expected correct previous'
+      )
       effects.enter('mathText')
       effects.enter('mathTextSequence')
       return sequenceOpen(code)
@@ -233,7 +236,10 @@ function createBackslashMathText(open, close) {
      */
     function start(code) {
       assert(code === codes.backslash, 'expected `\\`')
-      assert(previousBackslash.call(self, self.previous), 'expected correct previous')
+      assert(
+        previousBackslash.call(self, self.previous),
+        'expected correct previous'
+      )
       effects.enter('mathText')
       effects.enter('mathTextSequence')
       return sequenceOpen(code)
@@ -341,12 +347,10 @@ function createBackslashMathText(open, close) {
           size = 1
           return sequenceClose
         }
-      } else if (size === 1) {
-        if (code === close) {
-          effects.consume(code)
-          size = 2
-          return sequenceClose
-        }
+      } else if (size === 1 && code === close) {
+        effects.consume(code)
+        size = 2
+        return sequenceClose
       }
 
       token.type = 'mathTextData'
@@ -429,12 +433,9 @@ function previousDollar(code) {
  * @this {TokenizeContext}
  * @type {Previous}
  */
-/* c8 ignore start */
 function previousBackslash(code) {
   return (
     code !== codes.backslash ||
     this.events[this.events.length - 1][1].type === types.characterEscape
   )
 }
-/* c8 ignore stop */
-

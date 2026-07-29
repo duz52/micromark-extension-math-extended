@@ -1,7 +1,7 @@
 {
   "name": "micromark-extension-math-extended",
   "version": "3.2.1",
-  "description": "micromark extension to support math (`$C_L$`) and (`\\[C_L\\]`)",
+  "description": "micromark extension for dollar (`$C_L$`) and TeX-style (`\\(C_L\\)`, `\\[C_L\\]`) math delimiters",
   "license": "MIT",
   "keywords": [
     "micromark",
@@ -15,8 +15,9 @@
     "markdown",
     "unified"
   ],
-  "repository": "Jerrynh770/micromark-extension-math-extended",
-  "bugs": "https://github.com/Jerrynh770/micromark-extension-math-extended/issues",
+  "repository": "duz52/micromark-extension-math-extended",
+  "bugs": "https://github.com/duz52/micromark-extension-math-extended/issues",
+  "funding": "https://buymeacoffee.com/duz52",
   "author": "Jerry Ho <jerrynh770@gmail.com> (https://angelrose.org)",
   "contributors": [
     "Jerry Ho <jerrynh770@gmail.com> (https://angelrose.org)",
@@ -59,11 +60,12 @@
     "prepack": "npm run build && npm run format",
     "build": "tsc --build --clean && tsc --build && type-coverage && micromark-build",
     "format": "remark . -qfo && prettier . -w --log-level warn && xo --fix",
+    "format-check": "remark . -qf && prettier . -c --log-level warn && xo",
     "test-api-prod": "node --conditions production test/index.js",
     "test-api-dev": "node --conditions development test/index.js",
     "test-api": "npm run test-api-dev && npm run test-api-prod",
     "test-coverage": "c8 --100 --reporter lcov npm run test-api",
-    "test": "npm run build && npm run format && npm run test-coverage"
+    "test": "npm run build && npm run format-check && npm run test-coverage"
   },
   "prettier": {
     "bracketSpacing": false,
