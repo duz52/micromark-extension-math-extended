@@ -18,15 +18,16 @@ import {mathText} from './math-text.js'
  */
 export function math(options) {
   const textConstructs = mathText(options)
+  const backslash = options?.backslashDelimiters !== false
 
   return {
     flow: {
       [codes.dollarSign]: mathFlowDollar,
-      [codes.backslash]: mathFlowBackslash
+      ...(backslash ? {[codes.backslash]: mathFlowBackslash} : {})
     },
     text: {
       [codes.dollarSign]: textConstructs.dollar,
-      [codes.backslash]: textConstructs.backslash
+      ...(backslash ? {[codes.backslash]: textConstructs.backslash} : {})
     }
   }
 }

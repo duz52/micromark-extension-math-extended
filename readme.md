@@ -7,8 +7,9 @@
 [![Downloads][downloads-badge]][downloads]
 [![Size][size-badge]][size]
 
-[micromark][] extensions to support math with additional LaTeX-style
-delimiters (`$C_L$`, `\(C_L\)`, `\[C_L\]`).
+[micromark][] extensions to support math with dollar delimiters (`$C_L$`),
+TeX-style inline delimiters (`\(C_L\)`), and TeX-style display delimiters
+(`\[C_L\]`).
 
 ## Notice
 
@@ -25,44 +26,35 @@ It adds LaTeX-style bracket notation support based on:
 
 ## Contents
 
-- [micromark-extension-math-extended](#micromark-extension-math-extended)
-  - [Extended mathematical notation support for micromark](#extended-mathematical-notation-support-for-micromark)
-  - [Notice](#notice)
-  - [Contents](#contents)
-  - [What is this?](#what-is-this)
-  - [When to use this](#when-to-use-this)
-  - [Install](#install)
-  - [Use](#use)
-  - [API](#api)
-    - [`math(options?)`](#mathoptions)
-          - [Parameters](#parameters)
-          - [Returns](#returns)
-    - [`mathHtml(options?)`](#mathhtmloptions)
-          - [Parameters](#parameters-1)
-          - [Returns](#returns-1)
-    - [`HtmlOptions`](#htmloptions)
-          - [Type](#type)
-    - [`Options`](#options)
-          - [Fields](#fields)
-  - [Authoring](#authoring)
-  - [HTML](#html)
-  - [CSS](#css)
-  - [Syntax](#syntax)
-  - [Types](#types)
-  - [Compatibility](#compatibility)
-  - [Security](#security)
-  - [Related](#related)
-  - [Contribute](#contribute)
-  - [License](#license)
+* [What is this?](#what-is-this)
+* [When to use this](#when-to-use-this)
+* [Install](#install)
+* [Use](#use)
+* [API](#api)
+  * [`math(options?)`](#mathoptions)
+  * [`mathHtml(options?)`](#mathhtmloptions)
+  * [`HtmlOptions`](#htmloptions)
+  * [`Options`](#options)
+* [Authoring](#authoring)
+* [HTML](#html)
+* [CSS](#css)
+* [Syntax](#syntax)
+* [Types](#types)
+* [Compatibility](#compatibility)
+* [Security](#security)
+* [Related](#related)
+* [Contribute](#contribute)
+* [License](#license)
 
 ## What is this?
 
 This package contains two extensions that add support for math syntax
 in markdown to [`micromark`][micromark].
 
-As there is no spec for math in markdown, this extension follows how code
-(fenced and text) works in Commonmark, but uses dollars and common TeX
-backslash fences.
+As there is no spec for math in Markdown, dollar-delimited math follows how
+code (fenced and text) works in CommonMark.
+Backslash-delimited math follows TeX’s paired `\( ... \)` and `\[ ... \]`
+semantics.
 
 ## When to use this
 
@@ -203,12 +195,17 @@ Configuration (TypeScript type).
 
 ###### Fields
 
+* `backslashDelimiters` (`boolean`, default: `true`)
+  — whether to support TeX-style `\( ... \)` inline math and `\[ ... \]`
+  display math.
+  These sequences are character escapes in CommonMark, so enabling this option
+  changes their normal Markdown meaning.
+  Set this option to `false` when CommonMark-compatible escapes are preferred.
 * `singleDollarTextMath` (`boolean`, default: `true`)
   — whether to support math (text, inline) with a single dollar.
   Single dollars work in Pandoc and many other places, but often interfere
   with “normal” dollars in text.
   If you turn this off, you use two or more dollars for text math.
-  Backslash delimiters (`\( ... \)`) and (`\[ ... \]`) are always enabled.
 
 ## Authoring
 
@@ -220,6 +217,45 @@ But on your own (math-heavy?) site it can be great!
 You can use code (fenced) with an info string of `math` to improve this, as
 that works in many places.
 
+Use `\( ... \)` for inline backslash-delimited math:
+
+```markdown
+The result is \(a + b\).
+```
+
+Use `\[ ... \]` for display math.
+The opening delimiter must occur where a flow construct can start, and the
+closing delimiter must be followed only by spaces and a line ending or the end
+of the document.
+The content and closing delimiter can be on the opening line:
+
+```markdown
+\[a + b\]
+```
+
+They can also span lines:
+
+```markdown
+\[
+a + b\]
+```
+
+Or all delimiters can occur on separate lines:
+
+```markdown
+\[
+a + b
+\]
+```
+
+A matching `\]` is required.
+Without one, the opening `\[` is treated as normal Markdown instead of
+consuming the remainder of the document.
+
+> 👉 **Compatibility note**: CommonMark normally interprets `\(` and `\[`
+> as character escapes.
+> Pass `backslashDelimiters: false` to preserve that behavior.
+
 ## HTML
 
 Math (flow) does not relate to HTML elements.
@@ -230,6 +266,8 @@ generates a bunch of divs and spans so math look pretty.
 The KaTeX result is wrapped in `<div>` (for flow, block) and `<span>` (for text,
 inline) elements, with two classes: `math` and either `math-display` or
 `math-inline`.
+Backslash parentheses produce inline math and backslash brackets produce
+display math.
 
 When turning markdown into HTML, each line ending in math (text) is turned
 into a space.
@@ -249,58 +287,55 @@ At the time of writing, the last version is:
 
 ## Syntax
 
-Math forms with the following BNF:
+Math forms with the following simplified BNF:
 
 ```abnf
-; Restriction: the number of markers in the closing sequence must be equal
-; to the number of markers in the opening sequence.
-mathText ::= sequenceText 1*byte sequenceText
-mathFlow ::= fenceOpen *( eol *line ) [ eol fenceClose ]
+mathText ::= mathTextDollar / mathTextBackslash
+mathTextDollar ::= sequenceDollarText 1*byte sequenceDollarText
+mathTextBackslash ::= "\\(" *byte "\\)"
 
-sequenceText ::= sequenceTextDollar / sequenceTextBackslash
-sequenceTextDollar ::= 1*"$"
-sequenceTextBackslash ::= "\\" "("
+mathFlow ::= mathFlowDollar / mathFlowBackslash
+mathFlowDollar ::= fenceDollarOpen *( eol *line ) [ eol fenceDollarClose ]
+mathFlowBackslash ::= "\\[" *byte "\\]" *spaceOrTab ( eol / eof )
+; Restriction: an unescaped nested "\\[" cannot occur in
+; `mathFlowBackslash` content.  Paired backslashes remain content, so the
+; common TeX line-break form "\\\\[2pt]" is allowed.
 
-fenceOpen ::= sequenceFlow meta
-fenceClose ::= sequenceFlowClose *spaceOrTab
-sequenceFlow ::= sequenceFlowDollar / sequenceFlowBackslash
-sequenceFlowDollar ::= 2*"$"
-sequenceFlowBackslash ::= "\\" "["
-
-sequenceFlowClose ::= sequenceFlowDollarClose / sequenceFlowBackslashClose
-sequenceFlowDollarClose ::= sequenceFlowDollar
-sequenceFlowBackslashClose ::= "\\" "]"
-; Restriction: the marker cannot occur in `meta`
+fenceDollarOpen ::= sequenceDollarFlow *spaceOrTab [meta]
+fenceDollarClose ::= sequenceDollarFlow *spaceOrTab
+sequenceDollarText ::= 1*"$"
+sequenceDollarFlow ::= 2*"$"
 meta ::= 1*line
 
 ; Character groups for informational purposes.
 byte ::= %x00-FFFF
 eol ::= "\n" | "\r" | "\r\n"
+eof ::= end of file
 line ::= byte - eol
 ```
 
-The above grammar shows that it is not possible to create empty math (text).
+For dollar-delimited math, the opening and closing sequences must contain the
+same number of markers.
+A dollar cannot occur in flow meta.
+Dollar flow meta is optional and ignored when rendering.
 
-You can include the delimiters inside math (text) either by stacking more
-markers or by mixing delimiter styles:
+Dollar sequences are greedy: they cannot be preceded or followed by more dollar
+markers.
+You can include dollar delimiters inside math text by stacking more markers or
+mixing delimiter styles:
 
 ```markdown
 Mix styles: \( $a$ \) or include more markers: $a$$b$.
 ```
 
-It is also possible to include just one dollar marker by padding with a
-longer fence:
+It is also possible to include one dollar marker by padding with a longer
+fence:
 
 ```markdown
 Include just one: $$ $ $$.
 ```
 
-Backslash fences behave the same way: `\(` must be closed with `\)` and `\[`
-with `\]`.
-
-Sequences are “gready”, in that they cannot be preceded or followed by more
-markers.
-To illustrate:
+To illustrate dollar greediness:
 
 ```markdown
 Not math: $$x$.
@@ -321,15 +356,12 @@ Yields:
 <p>Escapes work, this is math: <span>...</span>$.</p>
 ```
 
-That is because, when turning markdown into HTML, the first and last space,
-if both exist and there is also a non-space in the math, are removed.
-Line endings, at that stage, are considered as spaces.
-
-As the math (flow) construct occurs in flow, like all flow constructs, it must
-be followed by an eol (line ending) or eof (end of file).
+When turning math text into HTML, the first and last space are removed if both
+exist and there is also a non-space in the math.
+Line endings are considered spaces at that stage.
 
 The above grammar does not show how indentation of each line is handled.
-To parse math (flow), let `x` be the number of `space_or_tab` characters
+To parse dollar math flow, let `x` be the number of `space_or_tab` characters
 before the opening fence sequence, after interpreting tabs based on how many
 virtual spaces they represent.
 Each line of text is then allowed (not required) to be indented with up
@@ -339,12 +371,9 @@ This indent does not affect the closing fence.
 It can be indented up to a separate 3 real or virtual spaces.
 A bigger indent makes it part of the content instead of a fence.
 
-The `meta` part is interpreted as the [string][micromark-content-types] content
-type.
+Dollar flow `meta` is interpreted as the
+[string][micromark-content-types] content type.
 That means that character escapes and character references are allowed.
-
-The optional `meta` part is ignored: it is not used when parsing or
-rendering.
 
 ## Types
 
@@ -354,15 +383,17 @@ and [`Options`][api-options].
 
 ## Compatibility
 
-Projects maintained by the unified collective are compatible with maintained
-versions of Node.js.
-
-When we cut a new major release, we drop support for unmaintained versions of
-Node.
-This means we try to keep the current release line,
-`micromark-extension-math@^3`, compatible with Node.js 16.
+The current release line supports Node.js 16 and later.
 
 This package works with `micromark` version `3` and later.
+
+This package extends `micromark-extension-math` with backslash delimiters.
+When `backslashDelimiters` is enabled, it intentionally changes the CommonMark
+meaning of `\(` and `\[`.
+`mdast-util-math` and `remark-math` can consume the resulting math tokens, but
+their Markdown serializer emits dollar delimiters.
+Round trips therefore preserve the math value and display/inline kind, but not
+the original delimiter style.
 
 ## Security
 
@@ -391,18 +422,18 @@ abide by its terms.
 
 MIT © 2020 [Titus Wormer][author].
 
-Extended modifications © 2025 [Jerry Ho][fork-author].
+Extended modifications © 2025–2026 [Jerry Ho][fork-author].
 See [license][].
 
 <!-- Definitions -->
 
-[build-badge]: https://github.com/micromark/micromark-extension-math/workflows/main/badge.svg
+[build-badge]: https://github.com/duz52/micromark-extension-math-extended/actions/workflows/main.yml/badge.svg
 
-[build]: https://github.com/micromark/micromark-extension-math/actions
+[build]: https://github.com/duz52/micromark-extension-math-extended/actions
 
-[coverage-badge]: https://img.shields.io/codecov/c/github/Jerrynh770/micromark-extension-math-extended.svg
+[coverage-badge]: https://img.shields.io/codecov/c/github/duz52/micromark-extension-math-extended.svg
 
-[coverage]: https://codecov.io/github/Jerrynh770/micromark-extension-math-extended
+[coverage]: https://codecov.io/github/duz52/micromark-extension-math-extended
 
 [downloads-badge]: https://img.shields.io/npm/dm/micromark-extension-math-extended.svg
 

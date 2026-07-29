@@ -5,7 +5,7 @@
 
 import katex from 'katex'
 
-const renderToString = katex.renderToString
+const {renderToString} = katex
 
 /**
  * Create an extension for `micromark` to support math when serializing to

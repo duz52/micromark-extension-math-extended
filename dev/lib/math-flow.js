@@ -8,10 +8,14 @@ import {markdownLineEnding} from 'micromark-util-character'
 import {codes, constants, types} from 'micromark-util-symbol'
 
 /** @type {Construct} */
-export const mathFlowDollar = createMathFlowConstruct('dollar')
+export const mathFlowDollar = createDollarMathFlowConstruct()
 
 /** @type {Construct} */
-export const mathFlowBackslash = createMathFlowConstruct('backslash')
+export const mathFlowBackslash = {
+  tokenize: tokenizeMathFlowBackslash,
+  concrete: true,
+  name: 'mathFlow'
+}
 
 /**
  * Preserve the historical export name for the dollar-based construct so that
@@ -28,14 +32,12 @@ const nonLazyContinuation = {
 }
 
 /**
- * Create a math flow construct for the requested delimiter family.
+ * Create a dollar-delimited math flow construct.
  *
- * @param {'dollar' | 'backslash'} kind
- *   Delimiter family to tokenize.
  * @returns {Construct}
- *   Math flow construct for the delimiter.
+ *   Dollar-delimited math flow construct.
  */
-function createMathFlowConstruct(kind) {
+function createDollarMathFlowConstruct() {
   return {
     tokenize: tokenizeMathFenced,
     concrete: true,
@@ -70,11 +72,7 @@ function createMathFlowConstruct(kind) {
      * @type {State}
      */
     function start(code) {
-      assert(
-        (kind === 'dollar' && code === codes.dollarSign) ||
-          (kind === 'backslash' && code === codes.backslash),
-        'expected math fence'
-      )
+      assert(code === codes.dollarSign, 'expected `$`')
       effects.enter('mathFlow')
       effects.enter('mathFlowFence')
       effects.enter('mathFlowFenceSequence')
@@ -94,24 +92,10 @@ function createMathFlowConstruct(kind) {
      * @type {State}
      */
     function sequenceOpen(code) {
-      if (kind === 'dollar') {
-        if (code === codes.dollarSign) {
-          effects.consume(code)
-          sizeOpen++
-          return sequenceOpen
-        }
-      } else {
-        if (sizeOpen === 0 && code === codes.backslash) {
-          effects.consume(code)
-          sizeOpen = 1
-          return sequenceOpen
-        }
-
-        if (sizeOpen === 1 && code === codes.leftSquareBracket) {
-          effects.consume(code)
-          sizeOpen = 2
-          return sequenceOpen
-        }
+      if (code === codes.dollarSign) {
+        effects.consume(code)
+        sizeOpen++
+        return sequenceOpen
       }
 
       if (sizeOpen < 2) {
@@ -140,7 +124,9 @@ function createMathFlowConstruct(kind) {
       }
 
       effects.enter('mathFlowFenceMeta')
-      effects.enter(types.chunkString, {contentType: constants.contentTypeString})
+      effects.enter(types.chunkString, {
+        contentType: constants.contentTypeString
+      })
       return meta(code)
     }
 
@@ -163,7 +149,7 @@ function createMathFlowConstruct(kind) {
         return metaAfter(code)
       }
 
-      if (kind === 'dollar' && code === codes.dollarSign) {
+      if (code === codes.dollarSign) {
         return nok(code)
       }
 
@@ -216,6 +202,7 @@ function createMathFlowConstruct(kind) {
         contentStart
       )(code)
     }
+
     /**
      * At math content.
      *
@@ -328,30 +315,13 @@ function createMathFlowConstruct(kind) {
        * @type {State}
        */
       function sequenceClose(code) {
-        if (kind === 'dollar') {
-          if (code === codes.dollarSign) {
-            size++
-            effects.consume(code)
-            return sequenceClose
-          }
-        } else {
-          if (size === 0 && code === codes.backslash) {
-            size = 1
-            effects.consume(code)
-            return sequenceClose
-          }
-
-          if (size === 1 && code === codes.rightSquareBracket) {
-            size = 2
-            effects.consume(code)
-            return sequenceClose
-          }
+        if (code === codes.dollarSign) {
+          size++
+          effects.consume(code)
+          return sequenceClose
         }
 
-        if (
-          (kind === 'dollar' && size < sizeOpen) ||
-          (kind === 'backslash' && size !== sizeOpen)
-        ) {
+        if (size < sizeOpen) {
           return nok(code)
         }
 
@@ -390,6 +360,170 @@ function createMathFlowConstruct(kind) {
       effects.exit('mathFlow')
       return ok(code)
     }
+  }
+}
+
+/**
+ * Tokenize display math delimited by `\[` and `\]`.
+ *
+ * Unlike dollar-delimited flow math, backslash-delimited display math follows
+ * TeX delimiter semantics: it has no meta string, the closing delimiter can
+ * occur on the opening line or after content on a later line, and a matching
+ * closing delimiter is required.
+ *
+ * @this {TokenizeContext}
+ * @type {Tokenizer}
+ */
+function tokenizeMathFlowBackslash(effects, ok, nok) {
+  const self = this
+  const tail = self.events[self.events.length - 1]
+  const initialSize =
+    tail && tail[1].type === types.linePrefix
+      ? tail[2].sliceSerialize(tail[1], true).length
+      : 0
+
+  return start
+
+  /** @type {State} */
+  function start(code) {
+    assert(code === codes.backslash, 'expected `\\`')
+    effects.enter('mathFlow')
+    effects.enter('mathFlowFence')
+    effects.enter('mathFlowFenceSequence')
+    effects.consume(code)
+    return open
+  }
+
+  /** @type {State} */
+  function open(code) {
+    if (code !== codes.leftSquareBracket) {
+      return nok(code)
+    }
+
+    effects.consume(code)
+    effects.exit('mathFlowFenceSequence')
+    effects.exit('mathFlowFence')
+    return beforeContent
+  }
+
+  /** @type {State} */
+  function beforeContent(code) {
+    if (code === codes.eof) {
+      return nok(code)
+    }
+
+    if (markdownLineEnding(code)) {
+      return effects.attempt(nonLazyContinuation, contentStart, nok)(code)
+    }
+
+    if (code === codes.backslash) {
+      return effects.attempt(
+        {tokenize: tokenizeClosingFence, partial: true},
+        after,
+        valueStart
+      )(code)
+    }
+
+    effects.enter('mathFlowValue')
+    return value(code)
+  }
+
+  /** @type {State} */
+  function contentStart(code) {
+    return (
+      initialSize
+        ? factorySpace(
+            effects,
+            beforeContent,
+            types.linePrefix,
+            initialSize + 1
+          )
+        : beforeContent
+    )(code)
+  }
+
+  /** @type {State} */
+  function valueStart(code) {
+    assert(code === codes.backslash, 'expected `\\`')
+    effects.enter('mathFlowValue')
+    effects.consume(code)
+    return valueAfterBackslash
+  }
+
+  /** @type {State} */
+  function valueAfterBackslash(code) {
+    // `\\` is an atomic TeX line-break command.  A following `[` starts its
+    // optional argument (for example, `\\[2pt]`), not a display delimiter.
+    if (code === codes.backslash) {
+      effects.consume(code)
+      return value
+    }
+
+    // Nested display delimiters are invalid in TeX.  Fail at the next opener
+    // so malformed input can recover there without repeatedly scanning to EOF.
+    if (code === codes.leftSquareBracket) {
+      return nok(code)
+    }
+
+    return value(code)
+  }
+
+  /** @type {State} */
+  function value(code) {
+    if (
+      code === codes.eof ||
+      code === codes.backslash ||
+      markdownLineEnding(code)
+    ) {
+      effects.exit('mathFlowValue')
+      return beforeContent(code)
+    }
+
+    effects.consume(code)
+    return value
+  }
+
+  /**
+   * @type {Tokenizer}
+   */
+  function tokenizeClosingFence(effects, ok, nok) {
+    return start
+
+    /** @type {State} */
+    function start(code) {
+      assert(code === codes.backslash, 'expected `\\`')
+      effects.enter('mathFlowFence')
+      effects.enter('mathFlowFenceSequence')
+      effects.consume(code)
+      return close
+    }
+
+    /** @type {State} */
+    function close(code) {
+      if (code !== codes.rightSquareBracket) {
+        return nok(code)
+      }
+
+      effects.consume(code)
+      effects.exit('mathFlowFenceSequence')
+      return factorySpace(effects, afterClose, types.whitespace)
+    }
+
+    /** @type {State} */
+    function afterClose(code) {
+      if (code === codes.eof || markdownLineEnding(code)) {
+        effects.exit('mathFlowFence')
+        return ok(code)
+      }
+
+      return nok(code)
+    }
+  }
+
+  /** @type {State} */
+  function after(code) {
+    effects.exit('mathFlow')
+    return ok(code)
   }
 }
 

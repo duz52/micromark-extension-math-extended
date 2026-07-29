@@ -4,7 +4,7 @@ import katex from 'katex'
 import {micromark} from 'micromark'
 import {math, mathHtml} from 'micromark-extension-math-extended'
 
-const renderToString = katex.renderToString
+const {renderToString} = katex
 
 test('math', async function (t) {
   await t.test('should expose the public api', async function () {
@@ -217,134 +217,424 @@ test('math', async function (t) {
     )
   })
 
-  await t.test('should support inline math with backslash parenthesis', async function () {
-    assert.equal(
-      micromark('a \\(b + c\\) d', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml()]
-      }),
-      '<p>a <span class="math math-inline">' +
-        renderToString('b + c') +
-        '</span> d</p>'
-    )
-  })
+  await t.test(
+    'should support inline math with backslash parentheses',
+    async function () {
+      assert.equal(
+        micromark('a \\(b + c\\) d', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>a <span class="math math-inline">' +
+          renderToString('b + c') +
+          '</span> d</p>'
+      )
+    }
+  )
 
-  await t.test('should support inline math with backslash brackets', async function () {
-    assert.equal(
-      micromark('value \\[x^2\\] test', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml()]
-      }),
-      '<p>value <span class="math math-inline">' +
-        renderToString('x^2') +
-        '</span> test</p>'
-    )
-  })
+  await t.test(
+    'should not treat backslash brackets in text as inline math',
+    async function () {
+      assert.equal(
+        micromark('value \\[x^2\\] test', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>value [x^2] test</p>'
+      )
+    }
+  )
 
-  await t.test('should support nested content inside backslash math', async function () {
-    assert.equal(
-      micromark('a \\(\\text{array}[i]\\)', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml()]
-      }),
-      '<p>a <span class="math math-inline">' +
-        renderToString('\\text{array}[i]') +
-        '</span></p>'
-    )
-  })
+  await t.test(
+    'should honor construct disabling for backslash delimiters',
+    async function () {
+      assert.equal(
+        micromark('\\[a\\]\n\n\\(b\\)', {
+          extensions: [math(), {disable: {null: ['mathFlow', 'mathText']}}],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>[a]</p>\n<p>(b)</p>'
+      )
+    }
+  )
 
-  await t.test('should support block math with backslash brackets', async function () {
+  await t.test(
+    'should support TeX commands inside backslash math',
+    async function () {
+      assert.equal(
+        micromark('a \\(\\text{array}[i]\\)', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>a <span class="math math-inline">' +
+          renderToString('\\text{array}[i]') +
+          '</span></p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should support display math with backslash brackets on one line',
+    async function () {
+      assert.equal(
+        micromark('\\[a + b\\]', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<div class="math math-display">' +
+          renderToString('a + b', {displayMode: true}) +
+          '</div>'
+      )
+    }
+  )
+
+  await t.test(
+    'should support TeX commands in backslash display math',
+    async function () {
+      assert.equal(
+        micromark('\\[\\frac{a}{b}\\]', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<div class="math math-display">' +
+          renderToString('\\frac{a}{b}', {displayMode: true}) +
+          '</div>'
+      )
+    }
+  )
+
+  await t.test(
+    'should support optional spacing after TeX line breaks in display math',
+    async function () {
+      const value = String.raw`\begin{cases}x \\[1em] y\end{cases}`
+
+      assert.equal(
+        micromark('\\[\n' + value + '\n\\]', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<div class="math math-display">' +
+          renderToString(value, {displayMode: true}) +
+          '</div>'
+      )
+    }
+  )
+
+  await t.test(
+    'should support a backslash display closing after content',
+    async function () {
+      assert.equal(
+        micromark('\\[\na + b\\]\n\nparagraph after', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<div class="math math-display">' +
+          renderToString('a + b', {displayMode: true}) +
+          '</div>\n<p>paragraph after</p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should support backslash display delimiters on separate lines',
+    async function () {
+      assert.equal(
+        micromark('\\[\r\na + b\r\n\\]  \r\n\r\nparagraph after', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<div class="math math-display">' +
+          renderToString('a + b', {displayMode: true}) +
+          '</div>\r\n<p>paragraph after</p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should preserve content after a one-line backslash display',
+    async function () {
+      assert.equal(
+        micromark('\\[a + b\\]\n\n# heading after', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<div class="math math-display">' +
+          renderToString('a + b', {displayMode: true}) +
+          '</div>\n<h1>heading after</h1>'
+      )
+    }
+  )
+
+  await t.test(
+    'should require a closing backslash display delimiter',
+    async function () {
+      assert.equal(
+        micromark('\\[not closed\n\nwhole document\n\n# heading', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>[not closed</p>\n<p>whole document</p>\n<h1>heading</h1>'
+      )
+    }
+  )
+
+  await t.test(
+    'should not interrupt a paragraph with an unclosed backslash display',
+    async function () {
+      assert.equal(
+        micromark('before\n\\[not closed\n\nafter', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>before\n[not closed</p>\n<p>after</p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should recover from an unclosed display at the next opening delimiter',
+    async function () {
+      assert.equal(
+        micromark('\\[\nunclosed\n\\[\nx\n\\]', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>[\nunclosed</p>\n' +
+          '<div class="math math-display">' +
+          renderToString('x', {displayMode: true}) +
+          '</div>'
+      )
+    }
+  )
+
+  await t.test(
+    'should reject a nested opener after a TeX line break',
+    async function () {
+      assert.equal(
+        micromark(
+          String.raw`\[
+x \\\[
+y
+\]`,
+          {
+            extensions: [math()],
+            htmlExtensions: [mathHtml()]
+          }
+        ),
+        '<p>[\nx \\[\ny\n]</p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should require the closing delimiter to end its line',
+    async function () {
+      assert.equal(
+        micromark('\\[foo\\](bar)', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>[foo](bar)</p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should interrupt a paragraph with a backslash display',
+    async function () {
+      assert.equal(
+        micromark('before\n\\[x\\]\nafter', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>before</p>\n' +
+          '<div class="math math-display">' +
+          renderToString('x', {displayMode: true}) +
+          '</div>\n' +
+          '<p>after</p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should support backslash display math in a block quote',
+    async function () {
+      assert.equal(
+        micromark('> \\[\n> a + b\n> \\]\n> after', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<blockquote>\n' +
+          '<div class="math math-display">' +
+          renderToString('a + b', {displayMode: true}) +
+          '</div>\n' +
+          '<p>after</p>\n' +
+          '</blockquote>'
+      )
+    }
+  )
+
+  await t.test(
+    'should support backslash display math in a list item',
+    async function () {
+      assert.equal(
+        micromark('* \\[\n  a + b\n  \\]\n  after', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<ul>\n' +
+          '<li>\n' +
+          '<div class="math math-display">' +
+          renderToString('a + b', {displayMode: true}) +
+          '</div>\n' +
+          'after' +
+          '</li>\n' +
+          '</ul>'
+      )
+    }
+  )
+
+  await t.test(
+    'should strip the opening indent from backslash display content',
+    async function () {
+      assert.equal(
+        micromark('  \\[\n  a + b\n  \\]', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<div class="math math-display">' +
+          renderToString('a + b', {displayMode: true}) +
+          '</div>'
+      )
+    }
+  )
+
+  await t.test(
+    'should not support lazy continuation in backslash display math',
+    async function () {
+      assert.equal(
+        micromark('> \\[\na + b\n\\]', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<blockquote>\n<p>[\na + b\n]</p>\n</blockquote>'
+      )
+    }
+  )
+
+  await t.test(
+    'should treat escaped backslash bracket sequences as literal text',
+    async function () {
+      assert.equal(
+        micromark('a \\\\[escaped\\\\]', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>a \\[escaped\\]</p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should treat escaped backslash parenthesis as literal text',
+    async function () {
+      assert.equal(
+        micromark('a \\\\(b\\\\) c', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>a \\(b\\) c</p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should support backslash math after an escaped backslash',
+    async function () {
+      assert.equal(
+        micromark(String.raw`\\\(x\)`, {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>\\<span class="math math-inline">' +
+          renderToString('x') +
+          '</span></p>'
+      )
+    }
+  )
+
+  await t.test(
+    'should support line endings inside backslash inline math',
+    async function () {
+      assert.equal(
+        micromark('\\(a\nb\\)', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml({throwOnError: false})]
+        }),
+        '<p><span class="math math-inline">' +
+          renderToString('a\nb', {throwOnError: false}) +
+          '</span></p>'
+      )
+    }
+  )
+
+  await t.test('should support empty backslash math', async function () {
     assert.equal(
-      micromark('\\[\na + b\n\\]', {
+      micromark('\\(\\)\n\n\\[\\]', {
         extensions: [math()],
         htmlExtensions: [mathHtml()]
       }),
-      '<div class="math math-display">' +
-        renderToString('a + b', {displayMode: true}) +
+      '<p><span class="math math-inline">' +
+        renderToString('') +
+        '</span></p>\n' +
+        '<div class="math math-display">' +
+        renderToString('', {displayMode: true}) +
         '</div>'
     )
   })
 
-  await t.test('should treat escaped backslash bracket sequences as literal text', async function () {
-    assert.equal(
-      micromark('a \\\\[escaped\\\\]', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml()]
-      }),
-      '<p>a \\[escaped\\]</p>'
-    )
-  })
+  await t.test(
+    'should not treat unclosed backslash inline math as math',
+    async function () {
+      assert.equal(
+        micromark('\\(incomplete and \\[unfinished', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>(incomplete and [unfinished</p>'
+      )
+    }
+  )
 
-  await t.test('should treat escaped backslash parenthesis as literal text', async function () {
-    assert.equal(
-      micromark('a \\\\(b\\\\) c', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml()]
-      }),
-      '<p>a \\(b\\) c</p>'
-    )
-  })
+  await t.test(
+    'should support mixing dollar and backslash inline math',
+    async function () {
+      assert.equal(
+        micromark('value $x$ and \\(y\\)', {
+          extensions: [math()],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>value <span class="math math-inline">' +
+          renderToString('x') +
+          '</span> and <span class="math math-inline">' +
+          renderToString('y') +
+          '</span></p>'
+      )
+    }
+  )
 
-  await t.test('should reject backslash block meta on the opening line', async function () {
-    assert.equal(
-      micromark('\\\\[meta]', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml()]
-      }),
-      '<p>\\[meta]</p>'
-    )
-  })
-
-  await t.test('should support line endings inside backslash math', async function () {
-    assert.equal(
-      micromark('\\(a\nb\\)', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml({throwOnError: false})]
-      }),
-      '<p><span class="math math-inline">' +
-        renderToString('a\nb', {throwOnError: false}) +
-        '</span></p>'
-    )
-  })
-
-  await t.test('should support empty backslash math delimiters', async function () {
-    assert.equal(
-      micromark('\\(\\) and \\[\\]', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml()]
-      }),
-      '<p><span class="math math-inline">' +
-        renderToString('') +
-        '</span> and <span class="math math-inline">' +
-        renderToString('') +
-        '</span></p>'
-    )
-  })
-
-  await t.test('should not treat unclosed backslash math as math', async function () {
-    assert.equal(
-      micromark('\\(incomplete and \\[unfinished', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml()]
-      }),
-      '<p>(incomplete and [unfinished</p>'
-    )
-  })
-
-  await t.test('should support mixing dollar and backslash inline math', async function () {
-    assert.equal(
-      micromark('value $x$ and \\(y\\)', {
-        extensions: [math()],
-        htmlExtensions: [mathHtml()]
-      }),
-      '<p>value <span class="math math-inline">' +
-        renderToString('x') +
-        '</span> and <span class="math math-inline">' +
-        renderToString('y') +
-        '</span></p>'
-    )
-  })
-
+  await t.test(
+    'should disable backslash delimiters with `backslashDelimiters: false`',
+    async function () {
+      assert.equal(
+        micromark('\\[y\\]\n\na \\(x\\)', {
+          extensions: [math({backslashDelimiters: false})],
+          htmlExtensions: [mathHtml()]
+        }),
+        '<p>[y]</p>\n<p>a (x)</p>'
+      )
+    }
+  )
 
   await t.test(
     'should not support math (flow) w/ one dollar sign',
