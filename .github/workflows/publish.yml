@@ -34,6 +34,6 @@ jobs:
             echo "Release tag $RELEASE_TAG does not match package version v$package_version"
             exit 1
           fi
-      - run: npm ci
+      - run: npm install
       - run: npm test
       - run: npm publish --access public
