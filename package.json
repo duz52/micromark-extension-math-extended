@@ -15,7 +15,10 @@
     "markdown",
     "unified"
   ],
-  "repository": "duz52/micromark-extension-math-extended",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/duz52/micromark-extension-math-extended.git"
+  },
   "bugs": "https://github.com/duz52/micromark-extension-math-extended/issues",
   "funding": "https://buymeacoffee.com/duz52",
   "author": "Jerry Ho <jerrynh770@gmail.com> (https://angelrose.org)",
